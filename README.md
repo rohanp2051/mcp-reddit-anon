@@ -25,25 +25,30 @@ This fork uses Reddit's anonymous OAuth flow (the same method Reddit's mobile ap
 
 ## Installation
 
-### With Nix
+### With Nix Flakes
+
+Add the flake input to your configuration:
+
+```nix
+# flake.nix
+{
+  inputs.mcp-reddit-anon.url = "github:rohanp2051/mcp-reddit-anon";
+}
+```
+
+Then use the package in your MCP server config:
 
 ```nix
 # In your MCP server config
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
 
 let
-  python = pkgs.python313;
-  pythonEnv = python.withPackages (ps: [
-    ps.fastmcp
-    ps.uvicorn
-  ]);
-  srcPath = "/path/to/mcp-reddit-anon/src";
+  mcp-reddit = inputs.mcp-reddit-anon.packages.${pkgs.system}.default;
 in
 {
   mcp.servers.reddit = {
-    command = "${pythonEnv}/bin/python";
-    args = [ "-m" "mcp_reddit.reddit_fetcher" ];
-    env.PYTHONPATH = srcPath;
+    command = "${mcp-reddit}/bin/mcp-reddit";
+    args = [ ];
   };
 }
 ```
