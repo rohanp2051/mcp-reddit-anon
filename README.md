@@ -88,3 +88,7 @@ The most upvoted thread is the Dev Diary #126, which provides an in-depth look a
 
 Would you like me to elaborate on any of these points or provide more details about the Victoria 3 update?
 ```
+
+## Acknowledgments
+
+This project was developed with assistance from [Claude](https://claude.ai), an AI assistant by Anthropic.
