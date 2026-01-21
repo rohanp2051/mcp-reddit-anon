@@ -1,5 +1,5 @@
 [project]
-name = "mcp-reddit-server"
+name = "mcp-reddit-anon"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -21,4 +21,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcp_reddit"] 
+packages = ["src/mcp_reddit"]

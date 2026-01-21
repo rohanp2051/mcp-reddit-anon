@@ -1,20 +1,11 @@
-import os
-from typing import Optional
-from redditwarp.ASYNC import Client
-from redditwarp.models.submission_ASYNC import LinkPost, TextPost, GalleryPost
-from fastmcp import FastMCP
 import logging
+from typing import Any
+from fastmcp import FastMCP
+from .reddit_auth import fetch_reddit_json
 
 mcp = FastMCP("Reddit MCP")
-
-REDDIT_CLIENT_ID=os.getenv("REDDIT_CLIENT_ID")
-REDDIT_CLIENT_SECRET=os.getenv("REDDIT_CLIENT_SECRET")
-REDDIT_REFRESH_TOKEN=os.getenv("REDDIT_REFRESH_TOKEN")
-
-CREDS = [x for x in [REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_REFRESH_TOKEN] if x]
-
-client = Client(*CREDS)
 logging.getLogger().setLevel(logging.WARNING)
+
 
 @mcp.tool()
 async def fetch_reddit_hot_threads(subreddit: str, limit: int = 10) -> str:
@@ -29,16 +20,26 @@ async def fetch_reddit_hot_threads(subreddit: str, limit: int = 10) -> str:
         Human readable string containing list of post information
     """
     try:
+        endpoint = f"/r/{subreddit}/hot?limit={limit}"
+        response = fetch_reddit_json(endpoint)
+
         posts = []
-        async for submission in client.p.subreddit.pull.hot(subreddit, limit):
+        children = response.get("data", {}).get("children", [])
+
+        for child in children:
+            data = child.get("data", {})
+            post_type = _get_post_type(data)
+            content = _get_content(data)
+
             post_info = (
-                f"Title: {submission.title}\n"
-                f"Score: {submission.score}\n"
-                f"Comments: {submission.comment_count}\n"
-                f"Author: {submission.author_display_name or '[deleted]'}\n"
-                f"Type: {_get_post_type(submission)}\n"
-                f"Content: {_get_content(submission)}\n"
-                f"Link: https://reddit.com{submission.permalink}\n"
+                f"Title: {data.get('title', '')}\n"
+                f"Score: {data.get('score', 0)}\n"
+                f"Comments: {data.get('num_comments', 0)}\n"
+                f"Author: {data.get('author', '[deleted]')}\n"
+                f"ID: {data.get('id', '')}\n"
+                f"Type: {post_type}\n"
+                f"Content: {content}\n"
+                f"Link: https://reddit.com{data.get('permalink', '')}\n"
                 f"---"
             )
             posts.append(post_info)
@@ -49,20 +50,32 @@ async def fetch_reddit_hot_threads(subreddit: str, limit: int = 10) -> str:
         logging.error(f"An error occurred: {str(e)}")
         return f"An error occurred: {str(e)}"
 
-def _format_comment_tree(comment_node, depth: int = 0) -> str:
-    """Helper method to recursively format comment tree with proper indentation"""
-    comment = comment_node.value
+
+def _format_comment(comment_data: dict, depth: int = 0) -> str:
+    """Helper method to format a comment with proper indentation"""
+    data = comment_data.get("data", {})
     indent = "-- " * depth
+
+    author = data.get("author", "[deleted]")
+    score = data.get("score", 0)
+    body = data.get("body", "[removed]")
+
     content = (
-        f"{indent}* Author: {comment.author_display_name or '[deleted]'}\n"
-        f"{indent}  Score: {comment.score}\n"
-        f"{indent}  {comment.body}\n"
+        f"{indent}* Author: {author}\n"
+        f"{indent}  Score: {score}\n"
+        f"{indent}  {body}\n"
     )
 
-    for child in comment_node.children:
-        content += "\n" + _format_comment_tree(child, depth + 1)
+    # Process nested replies
+    replies = data.get("replies")
+    if replies and isinstance(replies, dict):
+        replies_children = replies.get("data", {}).get("children", [])
+        for reply in replies_children:
+            if reply.get("kind") == "t1":  # t1 = comment
+                content += "\n" + _format_comment(reply, depth + 1)
 
     return content
+
 
 @mcp.tool()
 async def fetch_reddit_post_content(post_id: str, comment_limit: int = 20, comment_depth: int = 3) -> str:
@@ -78,21 +91,41 @@ async def fetch_reddit_post_content(post_id: str, comment_limit: int = 20, comme
         Human readable string containing post content and comments tree
     """
     try:
-        submission = await client.p.submission.fetch(post_id)
+        # Fetch post and comments
+        endpoint = f"/comments/{post_id}?limit={comment_limit}&depth={comment_depth}&sort=top"
+        response = fetch_reddit_json(endpoint)
+
+        if not isinstance(response, list) or len(response) < 2:
+            return "Error: Unexpected response format from Reddit"
+
+        # Reddit returns [submission_listing, comments_listing]
+        submission_listing = response[0]
+        comments_listing = response[1]
+
+        # Extract submission data
+        submission_children = submission_listing.get("data", {}).get("children", [])
+        if not submission_children:
+            return "Error: No submission data found"
+
+        data = submission_children[0].get("data", {})
+        post_type = _get_post_type(data)
+        post_content = _get_content(data)
 
         content = (
-            f"Title: {submission.title}\n"
-            f"Score: {submission.score}\n"
-            f"Author: {submission.author_display_name or '[deleted]'}\n"
-            f"Type: {_get_post_type(submission)}\n"
-            f"Content: {_get_content(submission)}\n"
+            f"Title: {data.get('title', '')}\n"
+            f"Score: {data.get('score', 0)}\n"
+            f"Author: {data.get('author', '[deleted]')}\n"
+            f"Type: {post_type}\n"
+            f"Content: {post_content}\n"
         )
 
-        comments = await client.p.comment_tree.fetch(post_id, sort='top', limit=comment_limit, depth=comment_depth)
-        if comments.children:
+        # Process comments
+        comments_children = comments_listing.get("data", {}).get("children", [])
+        if comments_children:
             content += "\nComments:\n"
-            for comment in comments.children:
-                content += "\n" + _format_comment_tree(comment)
+            for comment in comments_children:
+                if comment.get("kind") == "t1":  # t1 = comment
+                    content += "\n" + _format_comment(comment, depth=0)
         else:
             content += "\nNo comments found."
 
@@ -101,22 +134,24 @@ async def fetch_reddit_post_content(post_id: str, comment_limit: int = 20, comme
     except Exception as e:
         return f"An error occurred: {str(e)}"
 
-def _get_post_type(submission) -> str:
-    """Helper method to determine post type"""
-    if isinstance(submission, LinkPost):
-        return 'link'
-    elif isinstance(submission, TextPost):
-        return 'text'
-    elif isinstance(submission, GalleryPost):
-        return 'gallery'
-    return 'unknown'
 
-def _get_content(submission) -> Optional[str]:
+def _get_post_type(data: dict) -> str:
+    """Helper method to determine post type from submission data"""
+    if data.get("is_self"):
+        return "text"
+    elif data.get("is_gallery"):
+        return "gallery"
+    elif data.get("is_video"):
+        return "video"
+    else:
+        return "link"
+
+
+def _get_content(data: dict) -> str:
     """Helper method to extract post content based on type"""
-    if isinstance(submission, LinkPost):
-        return submission.permalink
-    elif isinstance(submission, TextPost):
-        return submission.body
-    elif isinstance(submission, GalleryPost):
-        return str(submission.gallery_link)
-    return None
+    if data.get("is_self"):
+        return data.get("selftext", "") or "(no text)"
+    elif data.get("is_gallery"):
+        return data.get("url", "")
+    else:
+        return data.get("url", "")
