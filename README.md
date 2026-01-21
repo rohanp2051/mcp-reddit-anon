@@ -1,9 +1,21 @@
-# MCP Reddit Server
-[![smithery badge](https://smithery.ai/badge/@adhikasp/mcp-reddit)](https://smithery.ai/server/@adhikasp/mcp-reddit)
+# MCP Reddit Server (Anonymous Fork)
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that provides tools for fetching and analyzing Reddit content.
 
-<a href="https://glama.ai/mcp/servers/3cg9gdyors"><img width="380" height="200" src="https://glama.ai/mcp/servers/3cg9gdyors/badge" alt="mcp-reddit MCP server" /></a>
+> **This is a fork of [adhikasp/mcp-reddit](https://github.com/adhikasp/mcp-reddit)** that uses anonymous OAuth authentication, requiring **no API credentials**.
+
+## Differences from Original
+
+This fork uses Reddit's anonymous OAuth flow (the same method Reddit's mobile apps use for logged-out users) instead of requiring user credentials.
+
+| Aspect          | [Original](https://github.com/adhikasp/mcp-reddit) | This Fork           |
+| --------------- | -------------------------------------------------- | ------------------- |
+| **Setup**       | Requires client ID, client secret, refresh token   | None                |
+| **Rate Limits** | Higher (authenticated)                             | Lower (anonymous)   |
+| **Access**      | Private subreddits, user actions                   | Public content only |
+
+**Use this fork** for quick setup and read-only public access.  
+**Use the original** for higher rate limits, private subreddits, or user actions.
 
 ## Features
 
@@ -13,23 +25,28 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) s
 
 ## Installation
 
-### Installing via Smithery
-
-To install Reddit Content for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@adhikasp/mcp-reddit):
-
-```bash
-npx -y @smithery/cli install @adhikasp/mcp-reddit --client claude
-```
-
 ### Manual Installation
+
 ```json
 {
   "reddit": {
     "command": "uvx",
-    "args": ["--from", "git+https://github.com/adhikasp/mcp-reddit.git", "mcp-reddit"],
+    "args": [
+      "--from",
+      "git+https://github.com/rohanp2051/mcp-reddit-anon.git",
+      "mcp-reddit"
+    ],
     "env": {}
   }
 }
+```
+
+### With Nix
+
+```bash
+git clone https://github.com/rohanp2051/mcp-reddit-anon.git
+cd mcp-reddit-anon
+nix develop  # Enters shell with all dependencies
 ```
 
 ## Usage
@@ -70,4 +87,4 @@ Based on the hot threads, here are the key highlights from the Victoria 3 subred
 The most upvoted thread is the Dev Diary #126, which provides an in-depth look at the upcoming game mechanics improvements, particularly the reworks to political movements and discrimination systems.
 
 Would you like me to elaborate on any of these points or provide more details about the Victoria 3 update?
-``` 
+```
