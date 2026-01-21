@@ -1,10 +1,18 @@
 import logging
-from typing import Any
+import re
 from fastmcp import FastMCP
 from .reddit_auth import fetch_reddit_json
 
 mcp = FastMCP("Reddit MCP")
 logging.getLogger().setLevel(logging.WARNING)
+
+# Validation patterns
+SUBREDDIT_PATTERN = re.compile(r"^[A-Za-z0-9_]{1,21}$")
+POST_ID_PATTERN = re.compile(r"^[a-z0-9]{1,10}$")
+
+# Limits
+MAX_LIMIT = 100
+MAX_COMMENT_DEPTH = 10
 
 
 @mcp.tool()
@@ -14,11 +22,18 @@ async def fetch_reddit_hot_threads(subreddit: str, limit: int = 10) -> str:
 
     Args:
         subreddit: Name of the subreddit
-        limit: Number of posts to fetch (default: 10)
+        limit: Number of posts to fetch (default: 10, max: 100)
 
     Returns:
         Human readable string containing list of post information
     """
+    # Validate subreddit name
+    if not SUBREDDIT_PATTERN.match(subreddit):
+        return "Error: Invalid subreddit name. Must be 1-21 alphanumeric characters or underscores."
+
+    # Clamp limit to valid range
+    limit = max(1, min(limit, MAX_LIMIT))
+
     try:
         endpoint = f"/r/{subreddit}/hot?limit={limit}"
         response = fetch_reddit_json(endpoint)
@@ -84,12 +99,20 @@ async def fetch_reddit_post_content(post_id: str, comment_limit: int = 20, comme
 
     Args:
         post_id: Reddit post ID
-        comment_limit: Number of top level comments to fetch
-        comment_depth: Maximum depth of comment tree to traverse
+        comment_limit: Number of top level comments to fetch (default: 20, max: 100)
+        comment_depth: Maximum depth of comment tree to traverse (default: 3, max: 10)
 
     Returns:
         Human readable string containing post content and comments tree
     """
+    # Validate post_id
+    if not POST_ID_PATTERN.match(post_id):
+        return "Error: Invalid post ID format."
+
+    # Clamp limits to valid ranges
+    comment_limit = max(1, min(comment_limit, MAX_LIMIT))
+    comment_depth = max(1, min(comment_depth, MAX_COMMENT_DEPTH))
+
     try:
         # Fetch post and comments
         endpoint = f"/comments/{post_id}?limit={comment_limit}&depth={comment_depth}&sort=top"

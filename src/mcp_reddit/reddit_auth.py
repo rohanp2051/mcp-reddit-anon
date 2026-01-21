@@ -85,16 +85,19 @@ class RedditAuth:
 _auth = RedditAuth()
 
 
-def fetch_reddit_json(endpoint: str) -> Any:
+def fetch_reddit_json(endpoint: str, _retry_count: int = 0) -> Any:
     """
     Fetch JSON data from Reddit's OAuth API.
 
     Args:
         endpoint: API endpoint path (e.g., "/r/Python/hot")
+        _retry_count: Internal retry counter (do not set manually)
 
     Returns:
         Parsed JSON data
     """
+    MAX_RETRIES = 3
+
     token = _auth.get_token()
 
     # Ensure endpoint starts with /
@@ -114,8 +117,8 @@ def fetch_reddit_json(endpoint: str) -> Any:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode())
     except urllib.error.HTTPError as e:
-        if e.code == 429:
-            # Rate limited - wait and retry
-            time.sleep(5)
-            return fetch_reddit_json(endpoint)
+        if e.code == 429 and _retry_count < MAX_RETRIES:
+            # Rate limited - wait and retry with exponential backoff
+            time.sleep(5 * (2 ** _retry_count))
+            return fetch_reddit_json(endpoint, _retry_count + 1)
         raise
